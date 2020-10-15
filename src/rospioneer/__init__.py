@@ -79,7 +79,7 @@ def _update():
     print("Upgrade Ubuntu")
     os.system("sudo apt-get upgrade -y")
     print("Update packages")
-    os.system("cd "+home+"/ && git submodule update")
+    os.system("cd "+home+"/ && git submodule update --init")
     print("Build ROS workspace")
     os.system("cd "+home+"/geoscan_ws && catkin_make")
     print("Updating Geoscan Pioneer Max system complite")
