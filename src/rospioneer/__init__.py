@@ -71,6 +71,21 @@ def _log():
     while not rospy.is_shutdown():
         pass
 
+def _update():
+    from pathlib import Path
+    home=str(Path.home())
+    print("Update Ubuntu")
+    os.system("sudo apt-get update")
+    print("Upgrade Ubuntu")
+    os.system("sudo apt-get upgrade -y")
+    print("Check Git Repository")
+    os.system("cd "+home+"/ && git fetch")
+    print("Update packages")
+    os.system("cd "+home+"/ && git pull")
+    print("Build ROS workspace")
+    os.system("cd "+home+"/geoscan_ws && catkin_make")
+    print("Updating Geoscan Pioneer Max system complite")
+
 def _start():
     subprocess.Popen(["roslaunch","gs_core","pioneer.launch","--screen"]).communicate()
 
@@ -85,6 +100,7 @@ Command:
     \trospioneer log    \tDisplays log messages
     \trospioneer status\tDisplays current state of Geoscan Pioneer Max
     \trospioneer camera\tLaunching broadcast from Raspberry Camera
+    \trospioneer update\tUpdating all Geoscan Pioneer Max systems
     """)
     exit()
 
@@ -105,6 +121,8 @@ def rospioneermain(argv=None):
             _status()
         elif command == "camera":
             _camera()
+        elif command == "update":
+            _update()
     except:
         pass
         
