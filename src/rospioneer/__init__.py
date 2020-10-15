@@ -80,6 +80,7 @@ def _update():
     print("Upgrade Ubuntu")
     os.system("sudo apt-get upgrade -y")
     print("Checking GitHub Repository")
+    os.system("cd "+home+"/ && git reset")
     os.system("cd "+home+"/ && git fetch")
     os.system("cd "+home+"/ && git pull")
     print("Update packages")
