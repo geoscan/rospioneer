@@ -71,6 +71,55 @@ def _log():
     while not rospy.is_shutdown():
         pass
 
+def _update():
+    import urllib.request as request
+    from pathlib import Path
+    import json
+    import xml.etree.ElementTree as etree
+    import warnings
+    import shutil
+
+    def get_version(pkg_name): 
+        version_str = str(subprocess.Popen(["rosversion", pkg_name], stdout=subprocess.PIPE).communicate()[0],'utf-8').replace("\n","").split(" ")
+        if(version_str[0]=="Cannot"):
+            return "0.0.0"
+        else:
+            return version_str[0]
+    
+    home=str(Path.home())
+    warnings.simplefilter("ignore")
+    print("Update Ubuntu")
+    os.system("sudo apt-get update")
+    print("Upgrade Ubuntu")
+    os.system("sudo apt-get upgrade -y")
+    print("Get paсkages list")
+    update=0
+    url="http://api.github.com/repos/IlyaDanilenko/geoscan_pioneer_max/contents/geoscan_ws/src"
+    url_version="https://raw.githubusercontent.com/IlyaDanilenko/{}/{}/package.xml"
+    package_list=json.loads(str(request.urlopen(url).read(),'utf-8'))
+    for package in package_list:
+        name=package['name']
+        if package['size'] == 0:
+            sha=package['sha']
+            xml_text=etree.fromstring(str(request.urlopen(url_version.format(str(name),str(sha))).read(),'utf-8'))
+            version=xml_text.getchildren()[1].text
+            print("Check "+name+" paсkage")
+            current_version=get_version(name)
+            if current_version < version:
+                update+=1
+                print("\tUpdate "+name+" paсkage")
+                shutil.rmtree(home+"/geoscan_ws/src/"+name)
+                subprocess.Popen(["git","clone","-n","https://github.com/IlyaDanilenko/"+name+".git",home+"/geoscan_ws/src/"+name],stdout=subprocess.PIPE).communicate()
+                subprocess.call(["cd",home+"/geoscan_ws/src/"+name,"&&","git checkout "+sha],shell=True)
+            else:
+                print("\tPaсkage "+name+" up to date")
+    ext_msg=""
+    if update > 0:
+        print("Start rebuild workspace")
+        os.system("cd "+str(Path.home())+"/geoscan_ws && catkin_make")
+        ext_msg=" To update the environment run \'source ~/.bashrc\' or open a new terminal session."
+    print("Updating Geoscan Pioneer Max system complite."+ext_msg)
+
 def _start():
     subprocess.Popen(["roslaunch","gs_core","pioneer.launch","--screen"]).communicate()
 
@@ -85,6 +134,7 @@ Command:
     \trospioneer log    \tDisplays log messages
     \trospioneer status\tDisplays current state of Geoscan Pioneer Max
     \trospioneer camera\tLaunching broadcast from Raspberry Camera
+    \trospioneer update\tUpdating all Geoscan Pioneer Max systems
     """)
     exit()
 
@@ -105,6 +155,9 @@ def rospioneermain(argv=None):
             _status()
         elif command == "camera":
             _camera()
-    except:
+        elif command == "update":
+            _update()
+    except Exception as e:
+        print(str(e))
         pass
         
