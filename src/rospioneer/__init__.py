@@ -77,7 +77,6 @@ def _update():
     import json
     import xml.etree.ElementTree as etree
     import warnings
-    import shutil
 
     def get_version(pkg_name): 
         version_str = str(subprocess.Popen(["rosversion", pkg_name], stdout=subprocess.PIPE).communicate()[0],'utf-8').replace("\n","").split(" ")
@@ -108,9 +107,10 @@ def _update():
             if current_version < version:
                 update+=1
                 print("\tUpdate "+name+" paсkage")
-                shutil.rmtree(home+"/geoscan_ws/src/"+name)
-                subprocess.Popen(["git","clone","-n","https://github.com/IlyaDanilenko/"+name+".git",home+"/geoscan_ws/src/"+name],stdout=subprocess.PIPE).communicate()
+                subprocess.call("sudo rm -r "+home+"/geoscan_ws/src/"+name,shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.Popen(["git","clone","https://github.com/IlyaDanilenko/"+name+".git",home+"/geoscan_ws/src/"+name],stdout=subprocess.PIPE).communicate()
                 subprocess.call(["cd",home+"/geoscan_ws/src/"+name,"&&","git checkout "+sha],shell=True)
+                subprocess.call("sudo rm -r "+home+"/geoscan_ws/src/"+name+"/.git",shell=True)
             else:
                 print("\tPaсkage "+name+" up to date")
     ext_msg=""
