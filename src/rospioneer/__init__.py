@@ -172,18 +172,17 @@ def rospioneermain(argv=None):
     argv = rospy.myargv(argv)
     if len(argv) == 1:
         _info()
-    # try:
-    command = argv[1]
-    if command == "start":
-        _start()
-    elif command == "log":
-        _log()
-    elif command == "status":
-        _status()
-    elif command == "camera":
-        _camera()
-    elif command == "update":
-        _update(argv)
-    # except Exception as e:
-    #     print(e)
-        
+    try:
+        command = argv[1]
+        if command == "start":
+            _start()
+        elif command == "log":
+            _log()
+        elif command == "status":
+            _status()
+        elif command == "camera":
+            _camera()
+        elif command == "update":
+            _update(argv)
+    except:
+        pass
