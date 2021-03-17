@@ -2,12 +2,13 @@
 
 Данный пакет предоставляет утилиту rospioneer 
 
-rospioneer - утилита командной строки для управления Geoscan Pioneer Max
+rospioneer - утилита командной строки для управления Геоскан Пионер Макс
 
 ## Доступные команды:
 * ```rospioneer``` - Просмотр всех доступных команд
-* ```rospioneer start``` - Запуск ROS и подключение к базовой плате Geoscan Pioneer
+* ```rospioneer start``` - Запуск ROS и подключение к базовой плате Геоскан Пионер
 * ```rospioneer log``` - Отображение лога в реальном времени
-* ```rospioneer status``` - Отображает текущее состояние Geoscan Pioneer Max
+* ```rospioneer status``` - Отображает текущее состояние Геоскан Пионер Макс
 * ```rospioneer camera``` - Запуск камеры и веб сервера трансляции изображения
-* ```rospioneer update``` - Обновление ПО Geoscan Pioneer Max
+* ```rospioneer update``` - Обновление ПО Геоскан Пионер Макс
+* ```rospioneer restart``` - Перезапуск базовой платы Геоскан Пионер
