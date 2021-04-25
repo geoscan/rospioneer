@@ -1,44 +1,39 @@
 #!/usr/bin/env python3
 
-import rospy
-import socket
-import os
-import sys
-import subprocess
-
-class ROSPioneerException(Exception):
-    pass
+import rospy, socket, json, os, sys, subprocess, warnings, pickle, rosgraph
+from rospy import ServiceProxy, Subscriber
+from gs_interfaces.srv import Live
+from rosservice import get_service_type
+from std_msgs.msg import String
+from gs_sensors import SensorManager
+import urllib.request as request
+from urllib.error import HTTPError
+from pathlib import Path
+import xml.etree.ElementTree as etree
+from std_srvs.srv import Empty
+sys.path.append("/home/ubuntu/geoscan_ws/src/gs_core/src/")
+from restart import restart
 
 def _check_master():
-    import rosgraph
     try:
         rosgraph.Master("/rospioneer").getPid()
+        return True
     except socket.error:
-        raise ROSPioneerException("Unable to communicate with master!")
+        return False
 
 def _status():
-    try:
-        _check_master()
-    except ROSPioneerException:
-        print("Unable to communicate with master!")
-        exit()
-    if rospy.is_shutdown():
-        return 
-    rospy.init_node("rospioneer",anonymous=True)
-    from rospy import ServiceProxy
-    from gs_interfaces.srv import Live
-    from rosservice import get_service_type
-    if get_service_type("/geoscan/alive") == None:
-        status = False
-    else:
-        status = ServiceProxy("geoscan/alive",Live)().status
-    if status:
-        from gs_sensors import SensorManager
-        sensors = SensorManager()
-        altitude = sensors.altitude()
-        roll, pitch, azimuth = sensors.orientation()
-        charge,secs = sensors.power()
-        print(
+    if _check_master():
+        rospy.init_node("rospioneer", anonymous=True)
+        if get_service_type("/geoscan/alive") == None:
+            status = False
+        else:
+            status = ServiceProxy("geoscan/alive",Live)().status
+        if status:
+            sensors = SensorManager()
+            altitude = sensors.altitude()
+            roll, pitch, azimuth = sensors.orientation()
+            charge,secs = sensors.power()
+            print(
 f"""Status:
     ONLINE
 Battary:
@@ -49,45 +44,33 @@ Orientation:
     Pitch: {pitch} deg.
     Azimuth: {azimuth} deg.
 Altitude: {altitude} """)
+        else:
+            print("""Status:
+            OFFLINE""")
     else:
-        print("""Status:
-        OFFLINE""") 
+        print("Unable to communicate with master!")
 
 def _log_callback(data):
     print(f"\t{data.data}")
 
 def _log():
-    try:
-        _check_master()
-    except ROSPioneerException:
+    if _check_master():
+        rospy.init_node("rospioneer",anonymous=True)
+        print("Log messages:")
+        Subscriber("geoscan/log",String,_log_callback)
+        while not rospy.is_shutdown():
+            pass
+    else:
         print("Unable to communicate with master!")
-        exit()
-    if rospy.is_shutdown():
-        return
-    rospy.init_node("rospioneer",anonymous=True)
-    from rospy import Subscriber
-    from std_msgs.msg import String
-    print("Log messages:")
-    Subscriber("geoscan/log",String,_log_callback)
-    while not rospy.is_shutdown():
-        pass
+
+def get_version(pkg_name): 
+    version_str = str(subprocess.Popen(["rosversion", pkg_name], stdout=subprocess.PIPE).communicate()[0],'utf-8').replace("\n","").split(" ")
+    if version_str[0]=="Cannot":
+        return "0.0.0"
+    else:
+        return version_str[0]
 
 def _update(argv):
-    import urllib.request as request
-    from urllib.error import HTTPError
-    from pathlib import Path
-    import json
-    import xml.etree.ElementTree as etree
-    import warnings
-    import pickle
-
-    def get_version(pkg_name): 
-        version_str = str(subprocess.Popen(["rosversion", pkg_name], stdout=subprocess.PIPE).communicate()[0],'utf-8').replace("\n","").split(" ")
-        if version_str[0]=="Cannot":
-            return "0.0.0"
-        else:
-            return version_str[0]
-    
     home = str(Path.home())
     warnings.simplefilter("ignore")
     print("\033[94mUpdate Ubuntu\033[00m")
@@ -153,6 +136,16 @@ def _start():
 def _camera():
     subprocess.Popen(["roslaunch","gs_camera","camera.launch","--screen"]).communicate()
 
+def _restart():
+    if _check_master():
+        rospy.init_node("rospioneer",anonymous=True)
+        if get_service_type("/geoscan/alive") != None:
+            ServiceProxy("/geoscan/restart", Empty)()
+        else:   
+            restart()
+    else:
+        restart()
+
 def _info():
     print("""rospioneer is comand-line tool for managing Geoscan Pioneer Max.
     
@@ -186,9 +179,7 @@ def rospioneermain(argv=None):
         elif command == "update":
             _update(argv)
         elif command == "restart":
-            sys.path.append("/home/ubuntu/geoscan_ws/src/gs_core/src/")
-            from restart import restart
-            restart()
+            _restart()
         else:
             print("Wrong command. For a complete list of commands, enter \"rospioneer\"")
     except:
