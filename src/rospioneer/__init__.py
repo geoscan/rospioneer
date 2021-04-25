@@ -39,22 +39,22 @@ def _status():
         roll, pitch, azimuth = sensors.orientation()
         charge,secs = sensors.power()
         print(
-"""Status:
+f"""Status:
     ONLINE
 Battary:
-    Time:{} secs.
-    Charge: {} V.
+    Time:{secs} secs.
+    Charge: {charge} V.
 Orientation:
-    Roll: {} deg.
-    Pitch: {} deg.
-    Azimuth: {} deg.
-Altitude: {} """.format(secs,charge,roll,pitch,azimuth,altitude))
+    Roll: {roll} deg.
+    Pitch: {pitch} deg.
+    Azimuth: {azimuth} deg.
+Altitude: {altitude} """)
     else:
         print("""Status:
         OFFLINE""") 
 
 def _log_callback(data):
-    print("\t{}".format(data.data))
+    print(f"\t{data.data}")
 
 def _log():
     try:
@@ -90,18 +90,18 @@ def _update(argv):
     
     home = str(Path.home())
     warnings.simplefilter("ignore")
-    print("\033[94m{}\033[00m" .format("Update Ubuntu"))
+    print("\033[94mUpdate Ubuntu\033[00m")
     os.system("sudo apt-get update")
-    print("\033[94m{}\033[00m" .format("Upgrade Ubuntu"))
+    print("\033[94mUpgrade Ubuntu\033[00m")
     os.system("sudo apt-get upgrade -y")
-    print("\033[94m{}\033[00m" .format("Get paсkages list"))
+    print("\033[94mGet paсkages list\033[00m")
     update = 0
     branch = "master"
     repos ="http://api.github.com/repos/geoscan/geoscan_pioneer_max"
-    url_branches="{}/branches".format(repos)
+    url_branches=f"{repos}/branches"
     branches_list = json.loads(str(request.urlopen(url_branches).read(),'utf-8'))
     workspace_dir = "/geoscan_ws/src/"
-    pickle_file = "{}rospioneer/src/rospioneer/branch.pickle".format(home+workspace_dir)
+    pickle_file = f"{home+workspace_dir}rospioneer/src/rospioneer/branch.pickle"
     try:
         with open(pickle_file,'rb') as f:
             branch = pickle.load(f)[0]
@@ -113,9 +113,9 @@ def _update(argv):
         with open(pickle_file,'wb') as f:
             pickle.dump([branch],f)
         change_branch = True
-    print("\033[94m{}\033[00m" .format("Git branch set to {}".format(branch)))
+    print(f"\033[94mGit branch set to {branch}\033[00m")
 
-    url = "{}/contents/geoscan_ws/src?ref={}".format(repos,branch)
+    url = f"{repos}/contents/geoscan_ws/src?ref={branch}"
     url_version = "https://raw.githubusercontent.com/geoscan/{}/{}/package.xml"
     
     try:
@@ -127,25 +127,25 @@ def _update(argv):
                 sha = package['sha']
                 xml_text = etree.fromstring(str(request.urlopen(url_version.format(str(name),str(sha))).read(),'utf-8'))
                 version = xml_text.getchildren()[1].text
-                print("Check {} paсkage".format(name))
+                print(f"Check {name} paсkage")
                 current_version = get_version(name)
                 if ( current_version < version ) or change_branch:
                     update += 1
-                    print("\tUpdate {} paсkage".format(name))
-                    subprocess.call("sudo rm -r "+home+workspace_dir+name,shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    subprocess.Popen(["git","clone","https://github.com/geoscan/{}.git".format(name),home+workspace_dir+name],stdout=subprocess.PIPE).communicate()
-                    subprocess.call("cd {} && git checkout {}".format(home+workspace_dir+name,sha),shell=True)
-                    subprocess.call("sudo rm -r {}/.git".format(home+workspace_dir+name),shell=True)
+                    print(f"\tUpdate {name} paсkage")
+                    subprocess.call(f"sudo rm -r {home+workspace_dir+name}",shell=True,stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    subprocess.Popen(["git","clone",f"https://github.com/geoscan/{name}.git",home+workspace_dir+name],stdout=subprocess.PIPE).communicate()
+                    subprocess.call(f"cd {home+workspace_dir+name} && git checkout {sha}",shell=True)
+                    subprocess.call(f"sudo rm -r {home+workspace_dir+name}/.git",shell=True)
                 else:
-                    print("\tPaсkage {} up to date".format(name))
+                    print(f"\tPaсkage {name} up to date")
         ext_msg = ""
         if update > 0:
             print("Start rebuild workspace")
-            os.system("cd {}/geoscan_ws && catkin_make".format(home))
+            os.system(f"cd {home}/geoscan_ws && catkin_make")
             ext_msg = " To update the environment run \'source ~/.bashrc\' or open a new terminal session."
-        print("\033[92m{}\033[00m" .format("Updating Geoscan Pioneer Max system complite."+ext_msg))
+        print(f"\033[92mUpdating Geoscan Pioneer Max system complite.{ext_msg}\033[00m")
     except HTTPError:
-        print("\033[91m{}{}\033[00m".format("geoscan_ws/src not found in branch: ",branch)) 
+        print(f"\033[91mgeoscan_ws/src not found in branch: {branch}\033[00m") 
 
 def _start():
     subprocess.Popen(["roslaunch","gs_core","pioneer.launch","--screen"]).communicate()
@@ -162,6 +162,7 @@ Command:
     \trospioneer status\tDisplays current state of Geoscan Pioneer Max
     \trospioneer camera\tLaunching broadcast from Raspberry Camera
     \trospioneer update\tUpdating all Geoscan Pioneer Max systems
+    \trospioneer restart\tRestart  Geoscan Pioneer Base
     """)
     exit()
 
@@ -184,5 +185,11 @@ def rospioneermain(argv=None):
             _camera()
         elif command == "update":
             _update(argv)
+        elif command == "restart":
+            sys.path.append("/home/ubuntu/geoscan_ws/src/gs_core/src/")
+            from restart import restart
+            restart()
+        else:
+            print("Wrong command. For a complete list of commands, enter \"rospioneer\"")
     except:
         pass
