@@ -140,7 +140,7 @@ def _restart():
     if _check_master():
         rospy.init_node("rospioneer",anonymous=True)
         if get_service_type("/geoscan/alive") != None:
-            ServiceProxy("/geoscan/restart", Empty)()
+            ServiceProxy("/geoscan/board/restart", Empty)()
         else:   
             restart()
     else:
