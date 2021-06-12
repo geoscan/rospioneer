@@ -2,6 +2,7 @@
 
 import rospy, socket, json, os, sys, subprocess, warnings, pickle, rosgraph
 from rospy import ServiceProxy, Subscriber
+from gs_vision.msg import QR, QR_array
 from gs_interfaces.srv import Live
 from rosservice import get_service_type
 from std_msgs.msg import String
@@ -11,6 +12,7 @@ from urllib.error import HTTPError
 from pathlib import Path
 import xml.etree.ElementTree as etree
 from std_srvs.srv import Empty
+from threading import Thread
 sys.path.append("/home/ubuntu/geoscan_ws/src/gs_core/src/")
 from restart import restart
 
@@ -145,17 +147,66 @@ def _restart():
             restart()
     else:
         restart()
+def _network(command):
+    if command == "hotspot":
+        os.system("sudo systemctl stop NetworkManager")
+        os.system("sudo systemctl disable NetworkManager")
+        os.system("sudo systemctl enable config-wlan")
+        os.system("sudo systemctl start config-wlan")
+        os.system("sudo systemctl enable isc-dhcp-server")
+        os.system("sudo systemctl start isc-dhcp-server")
+        os.system("sudo systemctl enable hostapd")
+        os.system("sudo systemctl start hostapd")
+        os.system("sudo systemctl restart code-server-wlan")
+        os.system("sudo systemctl restart web-wlan-menu")
+        os.system("sudo systemctl restart wlan-butterfly")
+        os.system("sudo systemctl restart mission-control-wlan")
+    elif command == "wifi":
+        detector = subprocess.Popen(["roslaunch", "gs_vision", "qrcode_test.launch", "--screen"])
+        while not _check_master():
+            pass
+        rospy.init_node("rospioneer",anonymous=True)
+        while not rospy.is_shutdown():
+            array = rospy.wait_for_message("geoscan/vision/qr", QR_array)
+            network_data = {}
+            if len(array.qrs) > 0:
+                data = array.qrs[0].data.split(";")
+                for d in data:
+                    sub_data = d.split(":")
+                    if sub_data[0] == "P":
+                        network_data["password"] = sub_data[1]
+                    elif sub_data[0] == "S":
+                        network_data["ssid"] = sub_data[1]
+                if network_data != {}:
+                    detector.terminate()
+                    os.system("sudo systemctl disable config-wlan")
+                    os.system("sudo systemctl stop isc-dhcp-server")
+                    os.system("sudo systemctl disable isc-dhcp-server")
+                    os.system("sudo systemctl stop hosatpd")
+                    os.system("sudo systemctl disable hostapd")
+                    os.system("sudo systemctl enable NetworkManager")
+                    os.system("sudo systemctl start NetworkManager")
+                    os.system(f"sudo nmcli device wifi connect \"{network_data['ssid']}\" password {network_data['password']} name \"{network_data['ssid']}\"")
+                    os.system("sudo systemctl restart code-server-wlan")
+                    os.system("sudo systemctl restart web-wlan-menu")
+                    os.system("sudo systemctl restart wlan-butterfly")
+                    os.system("sudo systemctl restart mission-control-wlan")
+                    exit()
+            else:
+                pass
 
 def _info():
     print("""rospioneer is comand-line tool for managing Geoscan Pioneer Max.
     
 Command:
-    \trospioneer start\tStart communication with Geoscan Pioneer board
-    \trospioneer log    \tDisplays log messages
-    \trospioneer status\tDisplays current state of Geoscan Pioneer Max
-    \trospioneer camera\tLaunching broadcast from Raspberry Camera
-    \trospioneer update\tUpdating all Geoscan Pioneer Max systems
-    \trospioneer restart\tRestart  Geoscan Pioneer Base
+    \trospioneer start\t\tStart communication with Geoscan Pioneer board
+    \trospioneer log    \t\tDisplays log messages
+    \trospioneer status\t\tDisplays current state of Geoscan Pioneer Max
+    \trospioneer camera\t\tLaunching broadcast from Raspberry Camera
+    \trospioneer update\t\tUpdating all Geoscan Pioneer Max systems
+    \trospioneer restart\t\tRestart  Geoscan Pioneer Base
+    \trospioneer network hotspot\tPuts the Raspberry Pi into hotspot mode
+    \trospioneer network wifi\t\tConnects Raspberry Pi to wi-fi network shown on QR code
     """)
     exit()
 
@@ -180,7 +231,9 @@ def rospioneermain(argv=None):
             _update(argv)
         elif command == "restart":
             _restart()
+        elif command == "network":
+            _network(argv[2])
         else:
             print("Wrong command. For a complete list of commands, enter \"rospioneer\"")
-    except:
-        pass
+    except Exception as e:
+        print(str(e))
