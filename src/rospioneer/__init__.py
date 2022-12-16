@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 
-import rospy, socket, json, os, sys, subprocess, warnings, pickle, rosgraph
+import rospy, socket, json, os, sys, subprocess, warnings, pickle, rosgraph, signal
 from rospy import ServiceProxy, Subscriber
 from gs_vision.msg import QR, QR_array
 from gs_interfaces.srv import Live
+from gs_interfaces.srv import NavigationSystem
+from geometry_msgs.msg import Point
+from gs_interfaces.msg import SimpleBatteryState, PointGPS, OptVelocity, Orientation, SatellitesGPS, Parameter
+from sensor_msgs.msg import Image
 from rosservice import get_service_type
-from std_msgs.msg import String
+from std_msgs.msg import String, Int8, Float32
 from gs_sensors import SensorManager
 import urllib.request as request
 from urllib.error import HTTPError
 from pathlib import Path
 import xml.etree.ElementTree as etree
 from std_srvs.srv import Empty
-from threading import Thread
+from time import sleep
 sys.path.append("/home/ubuntu/geoscan_ws/src/gs_core/src/")
 from restart import restart
 
@@ -29,7 +33,7 @@ def _status():
         if get_service_type("/geoscan/alive") == None:
             status = False
         else:
-            status = ServiceProxy("geoscan/alive",Live)().status
+            status = ServiceProxy("geoscan/alive", Live)().status
         if status:
             sensors = SensorManager()
             altitude = sensors.altitude()
@@ -207,8 +211,107 @@ Command:
     \trospioneer restart\t\tRestart  Geoscan Pioneer Base
     \trospioneer network hotspot\tPuts the Raspberry Pi into hotspot mode
     \trospioneer network wifi\t\tConnects Raspberry Pi to wi-fi network shown on QR code
+    \trospioneer selfcheck \t\t Check Geoscan Pioneer Max system
     """)
     exit()
+
+def _check_topic(topic_name, topic_type):
+    try:
+        rospy.wait_for_message(topic_name, topic_type, 5)
+        return True
+    except rospy.ROSException:
+        return False
+
+def _check_service(service_name, service_type):
+    msg = None
+    if get_service_type(service_name) is not None:
+        msg = ServiceProxy(service_name, service_type)()
+    return msg
+
+def _selfcheck():
+    check_topic_dict = {
+        "/geoscan/battery_state" : SimpleBatteryState,
+        "/geoscan/navigation/local/position" : Point,
+        "/geoscan/navigation/local/velocity" : Point,
+        "/geoscan/navigation/local/yaw" : Float32,
+        "/geoscan/navigation/global/position" : PointGPS,
+        "/geoscan/navigation/global/status" : Int8,
+        "/geoscan/navigation/opt/velocity" : OptVelocity,
+        "/geoscan/navigation/satellites" : SatellitesGPS,
+        "/geoscan/sensors/gyro" : Point,
+        "/geoscan/sensors/accel" : Point,
+        "/geoscan/sensors/altitude" : Float32,
+        "/geoscan/sensors/gyro" : Point,
+        "/geoscan/sensors/mag" : Point,
+        "/geoscan/sensors/orientation" : Orientation
+    }
+
+    print("Start checking")
+    print("ROS core checking...")
+    process = subprocess.Popen(["roslaunch","gs_core","pioneer.launch"], stdout=subprocess.PIPE, preexec_fn=os.setsid)
+    roscore = False
+    sleep(5)
+    for _ in range(10):
+        roscore = _check_master()
+    if roscore:
+        print(f"\033[92mROS core check - OK\033[00m")
+        print("Live Status checking...")
+        sleep(5)
+        status = False
+        rospy.init_node("rospioneer", anonymous=True)
+        for _ in range(5):
+            if get_service_type("/geoscan/alive") is None:
+                status = False
+            else:
+                status = ServiceProxy("geoscan/alive", Live)().status
+
+        if status:
+            print(f"\033[92mLive Status check - OK\033[00m")
+        else:
+            print("\033[91mLive Status check - FAILE \033[00m")
+
+        print("=======================")
+        print("Checking topics...")
+        
+        for name in check_topic_dict.keys():
+            if _check_topic(name, check_topic_dict[name]):
+                print(f"\033[92m{name} check - OK\033[00m")
+            else:
+                print(f"\033[91m{name} - FAILE \033[00m")
+
+        print("=======================")
+        print("Checking service...")
+
+        system = _check_service("/geoscan/navigation/get_system", NavigationSystem)
+        if system is not None:
+            print(f"\033[92mNavigation system - {system.navigation}\033[00m")
+        else:
+            print(f"\033[91mNavigation system - FAILE \033[00m")
+
+    else:
+        print("\033[91mROS core check - FAILE \033[00m")
+    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+
+    print("=======================")
+    print("Checking camera...")
+
+    process = subprocess.Popen(["roslaunch","gs_camera","camera.launch"], stdout=subprocess.PIPE, preexec_fn=os.setsid)
+    camera = False
+    sleep(10)
+
+    if not roscore:
+        rospy.init_node("rospioneer", anonymous=True)
+
+    for _ in range(5):
+        camera = _check_topic("/pioneer_max_camera/image_raw", Image)
+    
+    if camera:
+        print(f"\033[92mCamera check - OK\033[00m")
+    else:
+        print(f"\033[91mCamera check - FAILE \033[00m")
+    
+    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    print("Finish check")
 
 def rospioneermain(argv=None):
     if argv is None:
@@ -233,6 +336,8 @@ def rospioneermain(argv=None):
             _restart()
         elif command == "network":
             _network(argv[2])
+        elif command == "selfcheck":
+            _selfcheck()
         else:
             print("Wrong command. For a complete list of commands, enter \"rospioneer\"")
     except Exception as e:
